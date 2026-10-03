@@ -643,3 +643,160 @@ public class FlickTag : MenuMod
 
     public override void OnDisable() => has = false;
 }
+
+// ============================== MORE TAG MODS (ii-style) ==============================
+
+[ModCategory(Cat.Advantage)]
+[ModInfo("Tag All", "Attempts to tag every other player in the room", ButtonType.Fixed, AccessSetting.Public, EnabledType.Disabled, 0)]
+public class TagAll : MenuMod
+{
+    public override string BindHint => "TAP";
+    public override void Pressed()
+    {
+        if (!H.Ready) return;
+        foreach (Component rig in Adv.OtherRigs())
+            Adv.TryTag(rig);
+    }
+}
+
+[ModCategory(Cat.Advantage)]
+[ModInfo("Tag Aura", "Automatically tags any player who comes within range", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
+public class TagAura : MenuMod
+{
+    private float next;
+    public override void Update()
+    {
+        if (!H.Ready || Time.time < next) return;
+        next = Time.time + 0.2f;
+        Vector3 me = H.Head.position;
+        float range = TagAuraRange.Meters;
+        foreach (Component rig in Adv.OtherRigs())
+            if (Vector3.Distance(me, Adv.RigHead(rig)) < range)
+                Adv.TryTag(rig);
+    }
+}
+
+[ModCategory(Cat.Advantage)]
+[ModInfo("Tag Aura Range: ", "How far Tag Aura reaches", ButtonType.Incremental, AccessSetting.Public, EnabledType.Disabled, 0)]
+public class TagAuraRange : IncrementalMod
+{
+    private static readonly float[] R = [1.5f, 2.5f, 3.5f, 5f, 8f, 12f,];
+    protected override string[] Labels => ["1.5m", "2.5m", "3.5m", "5m", "8m", "12m",];
+    private static int idx = 1; // default 2.5m
+    public static float Meters => R[Mathf.Clamp(idx, 0, R.Length - 1)];
+    protected override void Changed() => idx = IncrementalValue;
+    public override void OnIncrementalStateLoaded() => idx = IncrementalValue;
+    public override bool ShowInEnabledList => false; // setting, not a running mod
+}
+
+[ModCategory(Cat.Advantage)]
+[ModInfo("Tag Reach", "Enlarges your hand tag colliders so you can tag from further away", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
+public class TagReach : MenuMod
+{
+    private readonly List<(Transform t, Vector3 s)> saved = [];
+    public override void OnEnable()  => Apply();
+    public override void OnDisable() => Restore();
+    public override void Update()    { if (saved.Count == 0) Apply(); }
+
+    private void Apply()
+    {
+        if (!H.Ready) return;
+        Restore();
+        foreach (Transform hand in new[] { H.LHand, H.RHand })
+        {
+            if (hand == null) continue;
+            foreach (Collider c in hand.GetComponentsInChildren<Collider>(true))
+            {
+                if (c == null) continue;
+                saved.Add((c.transform, c.transform.localScale));
+                c.transform.localScale = c.transform.localScale * 4f;
+            }
+        }
+    }
+
+    private void Restore()
+    {
+        foreach ((Transform t, Vector3 s) in saved)
+            if (t != null) t.localScale = s;
+        saved.Clear();
+    }
+}
+
+[ModCategory(Cat.Advantage)]
+[ModInfo("Anti Tag", "Disables your tag sensors so others have a harder time tagging you", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
+public class AntiTag : MenuMod
+{
+    private readonly List<(Collider col, bool was)> saved = [];
+    public override void OnEnable()  => Apply();
+    public override void OnDisable() => Restore();
+    public override void Update()    { if (saved.Count == 0) Apply(); }
+    private void Apply()
+    {
+        if (!H.Ready) return;
+        Restore();
+        foreach (Collider c in GTPlayer.Instance.GetComponentsInChildren<Collider>(true))
+        {
+            if (c == null) continue;
+            string n = c.name.ToLowerInvariant();
+            if (n.Contains("tag") || n.Contains("infect") || c.isTrigger)
+            { saved.Add((c, c.enabled)); c.enabled = false; }
+        }
+    }
+    private void Restore()
+    {
+        foreach ((Collider col, bool was) in saved)
+            if (col != null) col.enabled = was;
+        saved.Clear();
+    }
+}
+
+[ModCategory(Cat.Advantage)]
+[ModInfo("Blink", "Hold right trigger to teleport a short distance where you look", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
+public class Blink : MenuMod
+{
+    private float next;
+    public override string BindHint => "RT";
+    public override void Update()
+    {
+        if (!H.Ready || !H.RTrig || Time.time < next) return;
+        next = Time.time + 0.35f;
+        Vector3 dir = H.Look.forward;
+        dir.y = 0f;
+        if (dir.sqrMagnitude < 0.01f) dir = H.Look.forward;
+        dir.Normalize();
+        H.Teleport(H.Head.position + dir * 4f);
+    }
+}
+
+[ModCategory(Cat.Advantage)]
+[ModInfo("Tag Self", "Marks yourself as tagged (client-side if the game exposes it)", ButtonType.Fixed, AccessSetting.Public, EnabledType.Disabled, 0)]
+public class TagSelf : MenuMod
+{
+    public override void Pressed()
+    {
+        Component local = Adv.LocalRig();
+        if (local != null) Adv.TryTag(local);
+    }
+}
+
+[ModCategory(Cat.Advantage)]
+[ModInfo("Untag Self", "Tries to clear your tagged state (client-side)", ButtonType.Fixed, AccessSetting.Public, EnabledType.Disabled, 0)]
+public class UntagSelf : MenuMod
+{
+    public override void Pressed()
+    {
+        Component local = Adv.LocalRig();
+        if (local == null) return;
+        Type t = local.GetType();
+        const BindingFlags Any = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+        foreach (string f in new[] { "isTagged", "tagged", "infected", "isInfected" })
+        {
+            FieldInfo fi = t.GetField(f, Any);
+            if (fi != null && fi.FieldType == typeof(bool))
+            { try { fi.SetValue(local, false); } catch { } }
+            PropertyInfo pi = t.GetProperty(f, Any);
+            if (pi != null && pi.CanWrite && pi.PropertyType == typeof(bool))
+            { try { pi.SetValue(local, false); } catch { } }
+        }
+    }
+}
