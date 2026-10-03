@@ -51,7 +51,7 @@ public class ModRegistry
         SortCategories();
         foreach (List<MenuMod> list in byCat.Values) SortList(list);
         foreach (MenuMod m in All.ToList()) Safe(m, m.Start, "Start");
-        Plugin.Log.LogInfo($"Loaded {All.Count} mods in {Categories.Count} categories");
+        Plugin.Log.LogInfo($"Loaded {All.Count} mods in {Categories.Count} categories: " + string.Join(", ", Categories));
     }
 
     private void Insert(MenuMod mod)

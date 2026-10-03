@@ -9,7 +9,7 @@ public class Plugin : BaseUnityPlugin
 {
     public const string Guid    = "org.monkemenu.standalone";
     public const string Name    = "PVTX hacks";
-    public const string Version = "2.0.0";
+    public const string Version = "2.1.0";
 
     internal static ManualLogSource Log;
 

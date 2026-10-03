@@ -18,6 +18,14 @@ static class Adv
 
     public static Type RigType => Net.Find("VRRig") ?? Net.Find("GorillaTag.VRRig");
 
+    /// <summary>Works on older Unity versions that lack Object.FindObjectsByType(Type, ...).</summary>
+    private static Object[] FindAllOfType(Type t)
+    {
+        if (t == null) return Array.Empty<Object>();
+        try { return Resources.FindObjectsOfTypeAll(t); }
+        catch { return Array.Empty<Object>(); }
+    }
+
     /// <summary>Every VRRig in the scene that isn't ours.</summary>
     public static List<Component> OtherRigs()
     {
@@ -25,16 +33,17 @@ static class Adv
         Type t = RigType;
         if (t == null || !H.Ready) return list;
 
-        Object[] found = Object.FindObjectsByType(t, FindObjectsSortMode.None);
+        Object[] found = FindAllOfType(t);
         Transform self = GTPlayer.Instance.transform.root;
         Transform tagger = GorillaTagger.Instance != null ? GorillaTagger.Instance.transform.root : null;
 
         foreach (Object o in found)
         {
             if (o is not Component c || c == null) continue;
+            // skip assets / prefabs not in a real scene
+            if (c.gameObject.scene.name == null || !c.gameObject.scene.IsValid()) continue;
             if (c.transform.IsChildOf(self)) continue;
             if (tagger != null && c.transform.IsChildOf(tagger)) continue;
-            // skip offline/local markers if named that way
             string n = c.name;
             if (n.IndexOf("Offline", StringComparison.OrdinalIgnoreCase) >= 0) continue;
             list.Add(c);
@@ -129,9 +138,9 @@ static class Adv
         Type t = RigType;
         if (t == null || !H.Ready) return null;
         Transform self = GTPlayer.Instance.transform.root;
-        foreach (Object o in Object.FindObjectsByType(t, FindObjectsSortMode.None))
+        foreach (Object o in FindAllOfType(t))
         {
-            if (o is Component c && c != null && c.transform.IsChildOf(self))
+            if (o is Component c && c != null && c.gameObject.scene.IsValid() && c.transform.IsChildOf(self))
                 return c;
         }
         // offlineVRRig field on GorillaTagger
