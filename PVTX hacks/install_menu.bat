@@ -4,7 +4,7 @@ title MonkeMenu Installer
 cd /d "%~dp0"
 
 echo ==========================================
-echo   MonkeMenu - build and install
+echo   Menu - build and install
 echo ==========================================
 echo.
 
@@ -92,8 +92,7 @@ dotnet build "MonkeMenu\MonkeMenu.csproj" -c Release --nologo -v minimal
 if not exist "!DLL!" (
     echo.
     echo [ERROR] Build failed - no DLL was produced. Scroll up for the error lines
-    echo ^(build errors contain "error CS" or "error MSB"^). Paste them to Claude to get them fixed.
-    goto :fail
+    echo ^(build errors contain "error CS" or "error MSB"^).     goto :fail
 )
 
 rem ---------- 6. Install ----------

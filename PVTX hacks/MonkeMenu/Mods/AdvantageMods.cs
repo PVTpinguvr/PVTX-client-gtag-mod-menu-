@@ -152,19 +152,61 @@ static class Adv
         catch { }
         return null;
     }
+
+    /// <summary>
+    /// Teleport local player onto target for one physics step, attempt tag, restore pose.
+    /// This is the classic "tp tag gun" approach so tag colliders actually overlap.
+    /// </summary>
+    public static void FlickTagAt(Component target)
+    {
+        if (target == null || !H.Ready) return;
+        Transform root = GTPlayer.Instance.transform;
+        Rigidbody rb = H.Rb;
+        Vector3 pos = root.position;
+        Quaternion rot = root.rotation;
+        Vector3 vel = rb != null ? rb.velocity : Vector3.zero;
+        Vector3 aim = RigHead(target);
+        // sit slightly above their head so hands/body overlap their tag zone
+        root.position = aim + Vector3.up * 0.15f;
+        if (rb != null) { rb.position = root.position; rb.velocity = Vector3.zero; }
+        TryTag(target);
+        // also try tagging with our local body methods if any
+        try
+        {
+            if (GorillaTagger.Instance != null)
+            {
+                var mi = typeof(GorillaTagger).GetMethod("TagPlayer", Any)
+                      ?? typeof(GorillaTagger).GetMethod("TryToTag", Any);
+                mi?.Invoke(GorillaTagger.Instance, mi.GetParameters().Length == 0 ? null : new object[] { target });
+            }
+        }
+        catch { }
+        // restore immediately (same frame / next fixed step feels like 1ms)
+        root.position = pos;
+        root.rotation = rot;
+        if (rb != null) { rb.position = pos; rb.rotation = rot; rb.velocity = vel; }
+    }
 }
 
 // ============================== TAG GUN ==============================
 
 [ModCategory(Cat.Advantage)]
-[ModInfo("Tag Gun", "Hold right grip to aim, right trigger to tag the player under the dot", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
+[ModInfo("Tag Gun", "Gun on your right hand. Aim at a player, press right trigger to tag", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
 public class TagGun : MenuMod
 {
-    private GameObject   dot;
+    private GameObject   gun, dot;
     private LineRenderer line;
     private Component    locked;
+    private float        nextShot;
 
-    public override string BindHint => "RG+RT";
+    public override string BindHint => "RT";
+
+    public override void OnEnable()
+    {
+        if (gun == null) gun = H.MakeGun(new Color(0.85f, 0.15f, 0.15f));
+        if (dot == null) dot = H.Prim(PrimitiveType.Sphere, Vector3.one * 0.1f, Color.red, false);
+        if (line == null) line = H.MakeLine("TagGunLine", Color.red, 0.01f);
+    }
 
     public override void OnDisable()
     {
@@ -175,15 +217,11 @@ public class TagGun : MenuMod
     public override void Update()
     {
         if (!H.Ready) return;
-        if (!H.RGrip) { Cleanup(); locked = null; return; }
+        if (gun == null) OnEnable();
 
-        if (dot == null)
-        {
-            dot  = H.Prim(PrimitiveType.Sphere, Vector3.one * 0.12f, Color.red, false);
-            line = H.MakeLine("TagGunLine", Color.red, 0.008f);
-        }
-
-        Vector3 origin = H.RHand.position, dir = H.Point(false);
+        H.AttachGun(gun, false);
+        Vector3 origin = H.RHand.position + H.Point(false) * 0.15f;
+        Vector3 dir    = H.Point(false);
         Vector3 target = origin + dir * 80f;
         locked = null;
 
@@ -195,37 +233,44 @@ public class TagGun : MenuMod
             float dist   = to.magnitude;
             if (dist < 0.3f || dist > 80f) continue;
             float ang = Vector3.Angle(dir, to);
-            if (ang > 12f) continue;
+            if (ang > 14f) continue;
             float score = ang + dist * 0.02f;
             if (score < best) { best = score; locked = rig; target = head; }
         }
 
-        // also allow world raycast so the beam looks real when nobody is in the cone
         if (locked == null && Physics.Raycast(origin, dir, out RaycastHit hit, 80f))
             target = hit.point;
 
-        dot.transform.position = target;
-        dot.GetComponent<Renderer>().material.color = locked != null ? Color.green : Color.red;
-        line.startColor = line.endColor = locked != null ? Color.green : Color.red;
-        line.SetPosition(0, origin);
-        line.SetPosition(1, target);
-
-        if (H.RTrig && locked != null)
+        Color col = locked != null ? Color.green : Color.red;
+        if (dot != null)
         {
-            bool ok = Adv.TryTag(locked);
-            // visual feedback pulse
-            dot.transform.localScale = Vector3.one * (ok ? 0.22f : 0.12f);
+            dot.transform.position = target;
+            dot.transform.localScale = Vector3.one * (locked != null ? 0.16f : 0.1f);
+            Renderer r = dot.GetComponent<Renderer>();
+            if (r != null) r.material.color = col;
         }
-        else if (dot != null)
-            dot.transform.localScale = Vector3.one * 0.12f;
+        if (line != null)
+        {
+            line.startColor = line.endColor = col;
+            line.SetPosition(0, origin);
+            line.SetPosition(1, target);
+        }
+
+        if (H.RTrig && locked != null && Time.time >= nextShot)
+        {
+            nextShot = Time.time + 0.15f;
+            // Flick-tag: TP your rig onto the target for one frame, tag, TP back
+            Adv.FlickTagAt(locked);
+            SoundBoard.PlayMenuClick();
+        }
     }
 
     private void Cleanup()
     {
+        if (gun != null) Object.Destroy(gun);
         if (dot != null) Object.Destroy(dot);
         if (line != null) Object.Destroy(line.gameObject);
-        dot  = null;
-        line = null;
+        gun = null; dot = null; line = null;
     }
 }
 
@@ -255,21 +300,61 @@ public class TagNearby : MenuMod
 [ModInfo("Invis", "Hides your local monke mesh (others may still see you on networked games)", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
 public class Invis : MenuMod
 {
+    private static readonly List<(Renderer r, bool was)> saved = [];
+
     public override void OnEnable()  => Apply(false);
-    public override void OnDisable() => Apply(true);
+    public override void OnDisable() => Restore();
     public override void Update()    => Apply(false);
 
     private static void Apply(bool visible)
     {
         if (!H.Ready) return;
-        Component local = Adv.LocalRig();
-        if (local != null) Adv.SetRenderers(local, visible);
-        else
+        if (!visible && saved.Count > 0)
         {
-            // fallback: hide renderers under the player / tagger roots
-            Adv.SetRenderers(GTPlayer.Instance, visible);
-            if (GorillaTagger.Instance != null) Adv.SetRenderers(GorillaTagger.Instance, visible);
+            // already applied - force disabled every frame so game re-enables don't stick
+            foreach (var (r, _) in saved)
+                if (r != null) r.enabled = false;
+            return;
         }
+        if (visible) { Restore(); return; }
+        Restore();
+        void HideUnder(Component root)
+        {
+            if (root == null) return;
+            foreach (Renderer r in root.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null || r is ParticleSystemRenderer) continue;
+                saved.Add((r, r.enabled));
+                r.enabled = false;
+            }
+        }
+        Component local = Adv.LocalRig();
+        HideUnder(local);
+        HideUnder(GTPlayer.Instance);
+        if (GorillaTagger.Instance != null) HideUnder(GorillaTagger.Instance);
+        // also hide any VRRig under camera / head
+        try
+        {
+            Type t = Adv.RigType;
+            if (t != null)
+            {
+                foreach (Object o in Resources.FindObjectsOfTypeAll(t))
+                {
+                    if (o is not Component c || c == null) continue;
+                    if (!c.gameObject.scene.IsValid()) continue;
+                    if (c.transform.IsChildOf(GTPlayer.Instance.transform.root))
+                        HideUnder(c);
+                }
+            }
+        }
+        catch { }
+    }
+
+    private static void Restore()
+    {
+        foreach (var (r, was) in saved)
+            if (r != null) r.enabled = was;
+        saved.Clear();
     }
 }
 
@@ -538,29 +623,32 @@ public class BigHitbox : MenuMod
 // ============================== PULL GUN ==============================
 
 [ModCategory(Cat.Advantage)]
-[ModInfo("Pull Gun", "Hold right grip to aim, right trigger to yank the nearest player toward you", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
+[ModInfo("Pull Gun", "Gun on your right hand. Hold right trigger to yank the aimed player toward you", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
 public class PullGun : MenuMod
 {
-    private GameObject   dot;
+    private GameObject   gun, dot;
     private LineRenderer line;
     private Component    locked;
 
-    public override string BindHint => "RG+RT";
+    public override string BindHint => "RT";
+
+    public override void OnEnable()
+    {
+        if (gun == null) gun = H.MakeGun(new Color(0.15f, 0.75f, 0.95f));
+        if (dot == null) dot = H.Prim(PrimitiveType.Sphere, Vector3.one * 0.1f, Color.cyan, false);
+        if (line == null) line = H.MakeLine("PullGunLine", Color.cyan, 0.01f);
+    }
 
     public override void OnDisable() => Cleanup();
 
     public override void Update()
     {
         if (!H.Ready) return;
-        if (!H.RGrip) { Cleanup(); locked = null; return; }
+        if (gun == null) OnEnable();
+        H.AttachGun(gun, false);
 
-        if (dot == null)
-        {
-            dot  = H.Prim(PrimitiveType.Sphere, Vector3.one * 0.12f, Color.cyan, false);
-            line = H.MakeLine("PullGunLine", Color.cyan, 0.008f);
-        }
-
-        Vector3 origin = H.RHand.position, dir = H.Point(false);
+        Vector3 origin = H.RHand.position + H.Point(false) * 0.15f;
+        Vector3 dir    = H.Point(false);
         Vector3 target = origin + dir * 60f;
         locked = null;
         float best = float.MaxValue;
@@ -580,24 +668,28 @@ public class PullGun : MenuMod
         if (locked == null && Physics.Raycast(origin, dir, out RaycastHit hit, 60f))
             target = hit.point;
 
-        dot.transform.position = target;
-        line.SetPosition(0, origin);
-        line.SetPosition(1, target);
-        line.startColor = line.endColor = locked != null ? Color.cyan : new Color(0.3f, 0.3f, 0.4f);
+        Color col = locked != null ? Color.cyan : new Color(0.3f, 0.4f, 0.5f);
+        if (dot != null) { dot.transform.position = target; var r = dot.GetComponent<Renderer>(); if (r) r.material.color = col; }
+        if (line != null)
+        {
+            line.startColor = line.endColor = col;
+            line.SetPosition(0, origin);
+            line.SetPosition(1, target);
+        }
 
         if (H.RTrig && locked != null)
         {
-            // move their root toward us (client-side; networked pull needs game RPCs)
-            Vector3 pull = (H.Head.position - Adv.RigHead(locked)).normalized * 8f * Time.deltaTime;
+            Vector3 pull = (H.Head.position - Adv.RigHead(locked)).normalized * 10f * Time.deltaTime;
             locked.transform.root.position += pull;
         }
     }
 
     private void Cleanup()
     {
+        if (gun != null) Object.Destroy(gun);
         if (dot != null) Object.Destroy(dot);
         if (line != null) Object.Destroy(line.gameObject);
-        dot = null; line = null;
+        gun = null; dot = null; line = null;
     }
 }
 
@@ -638,7 +730,7 @@ public class FlickTag : MenuMod
             float s = a + dist;
             if (s < bestScore) { bestScore = s; best = rig; }
         }
-        if (best != null) Adv.TryTag(best);
+        if (best != null) Adv.FlickTagAt(best);
     }
 
     public override void OnDisable() => has = false;

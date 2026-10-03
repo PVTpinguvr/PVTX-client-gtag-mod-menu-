@@ -14,23 +14,22 @@ using MonkeMenu.Core;
 // Category names. Attribute args must be constants, so they live here.
 public static class Cat
 {
-    public const string Room         = "Room";
-    public const string Safety       = "Safety";
-    public const string Movement     = "Movement";
-    public const string Physics      = "Physics";
-    public const string World        = "World";
-    public const string Player       = "Player";
-    public const string Advantage    = "Advantage";
-    public const string Visual       = "Visual";
-    public const string Projectile   = "Projectile";
-    public const string Master       = "Master";
-    public const string Overpowered  = "Overpowered";
-    public const string Experimental = "Experimental";
-    public const string Detected     = "Detected";
-    public const string Info         = "Info";
-    public const string Fun          = "Fun";
-    public const string Sound        = "Sound";
-    public const string Utility      = "Utility";
+    public const string Lobby       = "Lobby";
+    public const string Room        = "Room";
+    public const string Safety      = "Safety";
+    public const string Movement    = "Movement";
+    public const string Physics     = "Physics";
+    public const string World       = "World";
+    public const string Player      = "Player";
+    public const string Advantage   = "Advantage";
+    public const string Visual      = "Visual";
+    public const string Projectiles = "Projectiles";
+    public const string Building    = "Building";
+    public const string Tools       = "Tools";
+    public const string Info        = "Info";
+    public const string Fun         = "Fun";
+    public const string Sound       = "Sound";
+    public const string Utility     = "Utility";
 }
 
 /// <summary>Colour list shared by the sky / ambient / fog colour mods. Index 0 is "Off".</summary>
@@ -234,15 +233,59 @@ public static class H
     {
         GameObject go = GameObject.CreatePrimitive(type);
         go.transform.localScale = scale;
+        go.name = "PVTX_Spawn";
 
         if (!collider)
         {
             Collider c = go.GetComponent<Collider>();
             if (c != null) Object.Destroy(c);
         }
+        else
+        {
+            // Avoid falling through forest terrain / mesh colliders
+            Collider col = go.GetComponent<Collider>();
+            if (col != null) col.material = SolidPhysMat();
+        }
 
         go.GetComponent<Renderer>().material = Mat(color);
         return go;
+    }
+
+    static PhysicsMaterial _solidMat;
+    public static PhysicsMaterial SolidPhysMat()
+    {
+        if (_solidMat == null)
+        {
+            _solidMat = new PhysicsMaterial("PVTX_Solid")
+            {
+                bounciness = 0.05f,
+                dynamicFriction = 0.6f,
+                staticFriction = 0.6f,
+                bounceCombine = PhysicsMaterialCombine.Minimum,
+                frictionCombine = PhysicsMaterialCombine.Average,
+            };
+        }
+        return _solidMat;
+    }
+
+    /// <summary>Add a Rigidbody that will not tunnel through floors (CCD + sensible defaults).</summary>
+    public static Rigidbody AddSolidBody(GameObject go, float mass = 1f)
+    {
+        Rigidbody rb = go.GetComponent<Rigidbody>() ?? go.AddComponent<Rigidbody>();
+        rb.mass = mass;
+        rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+        rb.interpolation = RigidbodyInterpolation.Interpolate;
+        rb.sleepThreshold = 0.01f;
+        return rb;
+    }
+
+    /// <summary>Snap Y onto the ground under xz so objects do not spawn inside / under the floor.</summary>
+    public static Vector3 SnapToGround(Vector3 pos, float up = 3f, float down = 20f)
+    {
+        Vector3 origin = pos + Vector3.up * up;
+        if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, up + down, ~0, QueryTriggerInteraction.Ignore))
+            return hit.point + Vector3.up * 0.02f;
+        return pos;
     }
 
     public static LineRenderer MakeLine(string name, Color color, float width)
@@ -254,6 +297,50 @@ public static class H
         l.material = SpriteMat(color);
         l.startColor = l.endColor = color;
         return l;
+    }
+
+    /// <summary>
+    /// Simple visible "gun" mesh glued to a hand (body + barrel + handle).
+    /// Used by Tag Gun / Teleport Gun / Pull Gun / etc. so you can actually see a gun.
+    /// </summary>
+    public static GameObject MakeGun(Color color)
+    {
+        GameObject root = new("PVTX_Gun");
+
+        void Part(PrimitiveType type, Vector3 localPos, Vector3 scale, Color c)
+        {
+            GameObject p = Prim(type, Vector3.one, c, false);
+            p.transform.SetParent(root.transform, false);
+            p.transform.localPosition = localPos;
+            p.transform.localRotation = Quaternion.identity;
+            p.transform.localScale = scale;
+        }
+
+        // body
+        Part(PrimitiveType.Cube, new Vector3(0f, 0.01f, 0.10f), new Vector3(0.045f, 0.055f, 0.18f), color);
+        // barrel
+        Part(PrimitiveType.Cube, new Vector3(0f, 0.02f, 0.24f), new Vector3(0.028f, 0.028f, 0.16f), color * 0.75f);
+        // muzzle tip
+        Part(PrimitiveType.Cube, new Vector3(0f, 0.02f, 0.33f), new Vector3(0.034f, 0.034f, 0.03f), Color.Lerp(color, Color.white, 0.35f));
+        // handle / grip
+        Part(PrimitiveType.Cube, new Vector3(0f, -0.05f, 0.04f), new Vector3(0.035f, 0.10f, 0.045f), color * 0.55f);
+        // sight
+        Part(PrimitiveType.Cube, new Vector3(0f, 0.05f, 0.14f), new Vector3(0.015f, 0.025f, 0.04f), Color.white);
+
+        return root;
+    }
+
+    /// <summary>Stick a gun object to the pointing hand each frame.</summary>
+    public static void AttachGun(GameObject gun, bool left = false)
+    {
+        if (gun == null || !Ready) return;
+        Transform hand = Hand(left);
+        // sit just in front of the palm, barrel along finger direction
+        gun.transform.position = hand.position
+                                 + hand.forward * 0.06f
+                                 + hand.up * -0.02f
+                                 + (left ? hand.right : -hand.right) * 0.02f;
+        gun.transform.rotation = hand.rotation;
     }
 
     public static TextMeshPro MakeHud(string name, Vector3 localPos)

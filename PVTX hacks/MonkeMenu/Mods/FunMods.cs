@@ -8,42 +8,58 @@ using MonkeMenu.Core;
 // All of these spawn LOCAL-only objects (only you see them) and clean themselves up.
 
 [ModCategory(Cat.Fun)]
-[ModInfo("Cube Gun", "Hold right trigger to fire cubes from your hand", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
+[ModInfo("Cube Gun", "Gun on right hand. Hold right trigger to fire cubes", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
 public class CubeGun : MenuMod
 {
     private float next;
+    private GameObject gun;
 
     public override string BindHint => "RT";
+    public override void OnEnable()  { if (gun == null) gun = H.MakeGun(new Color(1f, 0.55f, 0.1f)); }
+    public override void OnDisable() { if (gun != null) { Object.Destroy(gun); gun = null; } }
+
     public override void Update()
     {
-        if (!H.Ready || !H.RTrig || Time.time < next) return;
+        if (!H.Ready) return;
+        if (gun == null) OnEnable();
+        H.AttachGun(gun, false);
+
+        if (!H.RTrig || Time.time < next) return;
         next = Time.time + 0.12f;
 
         GameObject c = H.Prim(PrimitiveType.Cube, Vector3.one * 0.2f, H.Rainbow(1f));
-        c.transform.position = H.RHand.position + H.Point(false) * 0.2f;
+        c.transform.position = H.RHand.position + H.Point(false) * 0.35f;
         c.AddComponent<Rigidbody>().velocity = H.Point(false) * 12f;
         H.Track(c, 8f);
     }
 }
 
 [ModCategory(Cat.Fun)]
-[ModInfo("Ball Gun", "Hold left trigger to fire bouncy balls", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
+[ModInfo("Ball Gun", "Gun on left hand. Hold left trigger to fire bouncy balls", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
 public class BallGun : MenuMod
 {
     private float next;
     private PhysicsMaterial bouncy;
+    private GameObject gun;
 
     public override string BindHint => "LT";
+    public override void OnEnable()  { if (gun == null) gun = H.MakeGun(new Color(0.2f, 0.85f, 0.4f)); }
+    public override void OnDisable() { if (gun != null) { Object.Destroy(gun); gun = null; } }
+
     public override void Update()
     {
-        if (!H.Ready || !H.LTrig || Time.time < next) return;
+        if (!H.Ready) return;
+        if (gun == null) OnEnable();
+        H.AttachGun(gun, true);
+
+        if (!H.LTrig || Time.time < next) return;
         next = Time.time + 0.15f;
 
         bouncy ??= new PhysicsMaterial { bounciness = 0.9f, bounceCombine = PhysicsMaterialCombine.Maximum };
 
         GameObject b = H.Prim(PrimitiveType.Sphere, Vector3.one * Random.Range(0.15f, 0.4f), Random.ColorHSV(0f, 1f, 0.8f, 1f, 1f, 1f));
         b.GetComponent<Collider>().material = bouncy;
-        b.transform.position = H.LHand.position + H.Point(true) * 0.2f;
+        b.transform.position = H.LHand.position + H.Point(true) * 0.35f;
         b.AddComponent<Rigidbody>().velocity = H.Point(true) * 10f;
         H.Track(b, 10f);
     }
@@ -131,7 +147,7 @@ public class Confetti : MenuMod
         {
             GameObject c = H.Prim(PrimitiveType.Cube, Vector3.one * 0.07f, Random.ColorHSV(0f, 1f, 0.8f, 1f, 1f, 1f));
             c.transform.position = H.Head.position + H.Look.forward * 0.8f;
-            c.AddComponent<Rigidbody>().velocity = Random.onUnitSphere * 4f + Vector3.up * 3f;
+            var rb = H.AddSolidBody(c, 0.2f); rb.velocity = Random.onUnitSphere * 4f + Vector3.up * 3f;
             H.Track(c, 8f);
         }
     }
@@ -151,8 +167,9 @@ public class BallPit : MenuMod
         {
             GameObject b = H.Prim(PrimitiveType.Sphere, Vector3.one * Random.Range(0.2f, 0.35f), Random.ColorHSV(0f, 1f, 0.8f, 1f, 1f, 1f));
             b.GetComponent<Collider>().material = bouncy;
-            b.transform.position = H.Head.position + new Vector3(Random.Range(-1.5f, 1.5f), Random.Range(1.5f, 4f), Random.Range(-1.5f, 1.5f));
-            b.AddComponent<Rigidbody>();
+            Vector3 bp = H.Head.position + new Vector3(Random.Range(-1.5f, 1.5f), Random.Range(1.5f, 4f), Random.Range(-1.5f, 1.5f));
+            b.transform.position = bp;
+            H.AddSolidBody(b, 0.5f);
             H.Track(b, 25f);
         }
     }
@@ -172,8 +189,11 @@ public class CubeTower : MenuMod
         for (int i = 0; i < 15; i++)
         {
             GameObject c = H.Prim(PrimitiveType.Cube, Vector3.one * 0.25f, H.Rainbow(1f, i / 15f));
+            Vector3 cp = new Vector3(spot.x, baseY + 0.14f + i * 0.26f, spot.z);
+            c.transform.position = H.SnapToGround(cp) + Vector3.up * (0.14f + i * 0.26f);
+            // prefer stacked Y from ground hit
             c.transform.position = new Vector3(spot.x, baseY + 0.14f + i * 0.26f, spot.z);
-            c.AddComponent<Rigidbody>();
+            H.AddSolidBody(c, 1f);
             H.Track(c, 120f);
         }
     }
@@ -197,7 +217,7 @@ public class CubeWall : MenuMod
                 GameObject c = H.Prim(PrimitiveType.Cube, Vector3.one * 0.25f, H.Rainbow(1f, (x + y) / 11f));
                 c.transform.position = spot + side * ((x - 2.5f) * 0.26f);
                 c.transform.position = new Vector3(c.transform.position.x, baseY + 0.14f + y * 0.26f, c.transform.position.z);
-                c.AddComponent<Rigidbody>();
+                H.AddSolidBody(c, 1f);
                 H.Track(c, 120f);
             }
     }

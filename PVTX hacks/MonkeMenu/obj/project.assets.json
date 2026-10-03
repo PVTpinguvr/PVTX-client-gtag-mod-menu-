@@ -13,11 +13,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\user\\Downloads\\MonkeMenu_updated (2)\\MonkeMenu\\MonkeMenu.csproj",
+      "projectUniqueName": "C:\\Users\\user\\Downloads\\MonkeMenu_v2.7.0\\MonkeMenu\\MonkeMenu.csproj",
       "projectName": "MonkeMenu",
-      "projectPath": "C:\\Users\\user\\Downloads\\MonkeMenu_updated (2)\\MonkeMenu\\MonkeMenu.csproj",
+      "projectPath": "C:\\Users\\user\\Downloads\\MonkeMenu_v2.7.0\\MonkeMenu\\MonkeMenu.csproj",
       "packagesPath": "C:\\Users\\user\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\user\\Downloads\\MonkeMenu_updated (2)\\MonkeMenu\\obj\\",
+      "outputPath": "C:\\Users\\user\\Downloads\\MonkeMenu_v2.7.0\\MonkeMenu\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\user\\AppData\\Roaming\\NuGet\\NuGet.Config"

@@ -606,40 +606,54 @@ public class StopMoving : MenuMod
 }
 
 [ModCategory(Cat.Movement)]
-[ModInfo("Teleport Gun", "Right grip to aim, right trigger to teleport to the dot", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
+[ModInfo("Teleport Gun", "Gun on your right hand. Aim and press right trigger to teleport to the dot", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
 public class TeleportGun : MenuMod
 {
-    private GameObject dot;
+    private GameObject gun, dot;
     private LineRenderer line;
+    private float next;
 
-    public override string BindHint => "RG+RT";
+    public override string BindHint => "RT";
+
+    public override void OnEnable()
+    {
+        if (gun == null) gun = H.MakeGun(new Color(0.9f, 0.2f, 0.95f));
+        if (dot == null) dot = H.Prim(PrimitiveType.Sphere, Vector3.one * 0.14f, Color.magenta, false);
+        if (line == null) line = H.MakeLine("TeleportLine", Color.magenta, 0.012f);
+    }
+
     public override void OnDisable() => Cleanup();
 
     public override void Update()
     {
         if (!H.Ready) return;
-        if (!H.RGrip) { Cleanup(); return; }
+        if (gun == null) OnEnable();
+        H.AttachGun(gun, false);
 
-        if (dot == null)
+        Vector3 origin = H.RHand.position + H.Point(false) * 0.15f;
+        Vector3 dir = H.Point(false);
+        Vector3 target = Physics.Raycast(origin, dir, out RaycastHit hit, 200f) ? hit.point : origin + dir * 200f;
+        if (dot != null) dot.transform.position = target;
+        if (line != null)
         {
-            dot = H.Prim(PrimitiveType.Sphere, Vector3.one * 0.15f, Color.magenta, false);
-            line = H.MakeLine("TeleportLine", Color.magenta, 0.01f);
+            line.SetPosition(0, origin);
+            line.SetPosition(1, target);
         }
 
-        Vector3 origin = H.RHand.position, dir = H.Point(false);
-        Vector3 target = Physics.Raycast(origin, dir, out RaycastHit hit, 200f) ? hit.point : origin + dir * 200f;
-        dot.transform.position = target;
-        line.SetPosition(0, origin);
-        line.SetPosition(1, target);
-
-        if (H.RTrig) H.Teleport(target + Vector3.up * 0.8f);
+        if (H.RTrig && Time.time >= next)
+        {
+            next = Time.time + 0.25f;
+            H.Teleport(target + Vector3.up * 0.8f);
+            SoundBoard.PlayMenuClick();
+        }
     }
 
     private void Cleanup()
     {
+        if (gun != null) Object.Destroy(gun);
         if (dot != null) Object.Destroy(dot);
         if (line != null) Object.Destroy(line.gameObject);
-        dot = null; line = null;
+        gun = null; dot = null; line = null;
     }
 }
 
@@ -722,50 +736,6 @@ public class WindMod : IncrementalMod
         Vector3 f = H.Look.forward; f.y = 0f;
         if (f.sqrMagnitude < 0.01f) return;
         H.Rb.AddForce(f.normalized * Force[IncrementalValue], ForceMode.Acceleration);
-    }
-}
-
-// ============================== PLATFORMS (ii-style) ==============================
-
-[ModCategory(Cat.Movement)]
-[ModInfo("Platforms", "Hold grip to spawn a platform under each hand", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
-public class Platforms : MenuMod
-{
-    private readonly GameObject[] plats = new GameObject[2];
-    public override string BindHint => "Grip";
-
-    public override void OnDisable()
-    {
-        for (int i = 0; i < 2; i++)
-        {
-            if (plats[i] != null) Object.Destroy(plats[i]);
-            plats[i] = null;
-        }
-    }
-
-    public override void Update()
-    {
-        if (!H.Ready) return;
-        for (int i = 0; i < 2; i++)
-        {
-            bool left = i == 0;
-            if (H.Grip(left))
-            {
-                if (plats[i] == null)
-                {
-                    plats[i] = H.Prim(PrimitiveType.Cube, new Vector3(0.4f, 0.06f, 0.4f), new Color(0.6f, 0.3f, 1f));
-                    plats[i].AddComponent<KeepSolid>();
-                }
-                Transform hand = H.Hand(left);
-                plats[i].transform.position = hand.position + Vector3.down * 0.05f;
-                plats[i].transform.rotation = Quaternion.Euler(0f, hand.eulerAngles.y, 0f);
-            }
-            else if (plats[i] != null)
-            {
-                Object.Destroy(plats[i]);
-                plats[i] = null;
-            }
-        }
     }
 }
 

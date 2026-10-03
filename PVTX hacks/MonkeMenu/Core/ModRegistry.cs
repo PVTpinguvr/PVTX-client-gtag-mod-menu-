@@ -18,9 +18,9 @@ public class ModRegistry
 
     private static readonly string[] Order =
     [
-        Cat.Room, Cat.Safety, Cat.Movement, Cat.Physics, Cat.World, Cat.Player,
-        Cat.Advantage, Cat.Visual, Cat.Projectile, Cat.Master, Cat.Overpowered,
-        Cat.Experimental, Cat.Detected, Cat.Info, Cat.Fun, Cat.Sound, Cat.Utility,
+        Cat.Lobby, Cat.Room, Cat.Safety, Cat.Movement, Cat.Physics, Cat.World, Cat.Player,
+        Cat.Advantage, Cat.Visual, Cat.Projectiles, Cat.Building, Cat.Tools,
+        Cat.Info, Cat.Fun, Cat.Sound, Cat.Utility,
     ];
 
     /// <summary>Goes up whenever mods are added/removed so the menu knows to redraw.</summary>
