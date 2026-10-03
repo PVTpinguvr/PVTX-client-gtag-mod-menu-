@@ -1,10 +1,10 @@
 @echo off
 setlocal EnableDelayedExpansion
-title Menu Remover
+title MonkeMenu Remover
 cd /d "%~dp0"
 
 echo ==========================================
-echo   PVTX hacks - remove from game
+echo   MonkeMenu - remove from game
 echo ==========================================
 echo.
 

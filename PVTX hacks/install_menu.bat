@@ -4,7 +4,7 @@ title MonkeMenu Installer
 cd /d "%~dp0"
 
 echo ==========================================
-echo   PVTX hacks - build and install
+echo   MonkeMenu - build and install
 echo ==========================================
 echo.
 
@@ -87,7 +87,7 @@ set "GorillaTag_GamePath=!GAME!"
 set "DLL=MonkeMenu\bin\Release\netstandard2.1\MonkeMenu.dll"
 if exist "!DLL!" del /F /Q "!DLL!"
 echo.
-echo Building Menu ^(first run needs internet to fetch build tools^)...
+echo Building MonkeMenu ^(first run needs internet to fetch build tools^)...
 dotnet build "MonkeMenu\MonkeMenu.csproj" -c Release --nologo -v minimal
 if not exist "!DLL!" (
     echo.

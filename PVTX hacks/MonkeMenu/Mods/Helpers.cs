@@ -14,15 +14,16 @@ using MonkeMenu.Core;
 // Category names. Attribute args must be constants, so they live here.
 public static class Cat
 {
-    public const string Movement = "Movement";
-    public const string Physics  = "Physics";
-    public const string World    = "World";
-    public const string Player   = "Player";
-    public const string Visual   = "Visual";
-    public const string Info     = "Info";
-    public const string Fun      = "Fun";
-    public const string Sound    = "Sound";
-    public const string Utility  = "Utility";
+    public const string Movement  = "Movement";
+    public const string Physics   = "Physics";
+    public const string World     = "World";
+    public const string Player    = "Player";
+    public const string Advantage = "Advantage";
+    public const string Visual    = "Visual";
+    public const string Info      = "Info";
+    public const string Fun       = "Fun";
+    public const string Sound     = "Sound";
+    public const string Utility   = "Utility";
 }
 
 /// <summary>Colour list shared by the sky / ambient / fog colour mods. Index 0 is "Off".</summary>

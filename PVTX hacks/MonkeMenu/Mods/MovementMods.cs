@@ -416,6 +416,103 @@ public class NoClip : MenuMod
     }
 }
 
+// ============================== WALL NOCLIP ==============================
+// Walk through walls / vertical surfaces, but keep floors and ground solid.
+
+[ModCategory(Cat.Movement)]
+[ModInfo("Wall NoClip", "Phase through walls and vertical surfaces. Floors and ground stay solid so you don't fall", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
+public class WallNoClip : MenuMod
+{
+    private readonly List<Collider>    disabled = [];
+    private readonly HashSet<Collider> known    = [];
+    private float nextScan;
+
+    private static readonly string[] GroundWords =
+    [
+        "floor", "ground", "terrain", "platform", "surface", "mesh_road", "road", "path",
+        "grass", "dirt", "concrete_floor", "ceiling", // ceilings kept so you don't pop up through them by accident? actually user wants walls only - keep floors
+    ];
+
+    public override void OnEnable()
+    {
+        nextScan = 0f;
+        Scan();
+    }
+
+    public override void OnDisable()
+    {
+        foreach (Collider c in disabled)
+            if (c != null) c.enabled = true;
+        disabled.Clear();
+        known.Clear();
+    }
+
+    public override void Update()
+    {
+        if (!H.Ready || Time.time < nextScan) return;
+        nextScan = Time.time + 2f;
+        Scan();
+    }
+
+    private void Scan()
+    {
+        if (!H.Ready) return;
+        Transform self   = GTPlayer.Instance.transform.root;
+        Transform tagger = GorillaTagger.Instance != null ? GorillaTagger.Instance.transform.root : null;
+
+        foreach (Collider c in Object.FindObjectsByType<Collider>(FindObjectsSortMode.None))
+        {
+            if (c == null || c.isTrigger || known.Contains(c)) continue;
+            if (!c.enabled) continue;
+            Transform t = c.transform;
+            if (t.IsChildOf(self)) continue;
+            if (tagger != null && t.IsChildOf(tagger)) continue;
+            if (c.GetComponentInParent<KeepSolid>() != null) continue;
+            if (IsGround(c)) continue; // leave floors alone
+
+            known.Add(c);
+            disabled.Add(c);
+            c.enabled = false;
+        }
+    }
+
+    /// <summary>
+    /// Heuristic: flat / mostly-horizontal colliders and anything named like a floor stay solid.
+    /// Tall vertical-ish colliders are treated as walls and get disabled.
+    /// </summary>
+    private static bool IsGround(Collider c)
+    {
+        string n = c.gameObject.name.ToLowerInvariant();
+        string p = c.transform.parent != null ? c.transform.parent.name.ToLowerInvariant() : "";
+        foreach (string w in GroundWords)
+            if (n.Contains(w) || p.Contains(w)) return true;
+
+        Bounds b = c.bounds;
+        float y  = b.size.y;
+        float xz = Mathf.Max(b.size.x, b.size.z);
+
+        // Wide and not tall → floor / platform
+        if (y < 1.25f && xz > y * 1.8f) return true;
+
+        // Thin horizontal box (common floor slabs)
+        if (c is BoxCollider box)
+        {
+            Vector3 s = Vector3.Scale(box.size, c.transform.lossyScale);
+            float by = Mathf.Abs(s.y), bx = Mathf.Abs(s.x), bz = Mathf.Abs(s.z);
+            if (by < 0.6f && Mathf.Max(bx, bz) > by * 2f) return true;
+        }
+
+        // Mesh under the player that supports upward normals: sample a few points
+        // If a ray from above hits this collider with a steep upward normal, treat as ground.
+        Vector3 center = b.center;
+        if (Physics.Raycast(center + Vector3.up * 2f, Vector3.down, out RaycastHit hit, 4f, ~0, QueryTriggerInteraction.Ignore)
+            && hit.collider == c && hit.normal.y > 0.55f)
+            return true;
+
+        return false;
+    }
+}
+
 // ============================== TELEPORT ==============================
 
 [ModCategory(Cat.Movement)]
