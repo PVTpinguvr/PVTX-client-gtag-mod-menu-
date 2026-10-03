@@ -724,3 +724,125 @@ public class WindMod : IncrementalMod
         H.Rb.AddForce(f.normalized * Force[IncrementalValue], ForceMode.Acceleration);
     }
 }
+
+// ============================== PLATFORMS (ii-style) ==============================
+
+[ModCategory(Cat.Movement)]
+[ModInfo("Platforms", "Hold grip to spawn a platform under each hand", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
+public class Platforms : MenuMod
+{
+    private readonly GameObject[] plats = new GameObject[2];
+    public override string BindHint => "Grip";
+
+    public override void OnDisable()
+    {
+        for (int i = 0; i < 2; i++)
+        {
+            if (plats[i] != null) Object.Destroy(plats[i]);
+            plats[i] = null;
+        }
+    }
+
+    public override void Update()
+    {
+        if (!H.Ready) return;
+        for (int i = 0; i < 2; i++)
+        {
+            bool left = i == 0;
+            if (H.Grip(left))
+            {
+                if (plats[i] == null)
+                {
+                    plats[i] = H.Prim(PrimitiveType.Cube, new Vector3(0.4f, 0.06f, 0.4f), new Color(0.6f, 0.3f, 1f));
+                    plats[i].AddComponent<KeepSolid>();
+                }
+                Transform hand = H.Hand(left);
+                plats[i].transform.position = hand.position + Vector3.down * 0.05f;
+                plats[i].transform.rotation = Quaternion.Euler(0f, hand.eulerAngles.y, 0f);
+            }
+            else if (plats[i] != null)
+            {
+                Object.Destroy(plats[i]);
+                plats[i] = null;
+            }
+        }
+    }
+}
+
+[ModCategory(Cat.Movement)]
+[ModInfo("Trigger Platforms", "Hold trigger to spawn a platform under each hand", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
+public class TriggerPlatforms : MenuMod
+{
+    private readonly GameObject[] plats = new GameObject[2];
+    public override string BindHint => "LT/RT";
+
+    public override void OnDisable()
+    {
+        for (int i = 0; i < 2; i++)
+        {
+            if (plats[i] != null) Object.Destroy(plats[i]);
+            plats[i] = null;
+        }
+    }
+
+    public override void Update()
+    {
+        if (!H.Ready) return;
+        for (int i = 0; i < 2; i++)
+        {
+            bool left = i == 0;
+            if (H.Trigger(left))
+            {
+                if (plats[i] == null)
+                {
+                    plats[i] = H.Prim(PrimitiveType.Cube, new Vector3(0.4f, 0.06f, 0.4f), new Color(0.2f, 0.8f, 1f));
+                    plats[i].AddComponent<KeepSolid>();
+                }
+                Transform hand = H.Hand(left);
+                plats[i].transform.position = hand.position + Vector3.down * 0.05f;
+                plats[i].transform.rotation = Quaternion.Euler(0f, hand.eulerAngles.y, 0f);
+            }
+            else if (plats[i] != null)
+            {
+                Object.Destroy(plats[i]);
+                plats[i] = null;
+            }
+        }
+    }
+}
+
+[ModCategory(Cat.Movement)]
+[ModInfo("Iron Man", "Hold both grips to blast in the direction of your hands", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
+public class IronMan : MenuMod
+{
+    public override string BindHint => "LG+RG";
+    public override void FixedUpdate()
+    {
+        if (!H.Ready) return;
+        if (!(H.LGrip && H.RGrip)) return;
+        Vector3 force = (H.Point(true) + H.Point(false)).normalized;
+        H.Rb.AddForce(force * 35f, ForceMode.Acceleration);
+    }
+}
+
+[ModCategory(Cat.Movement)]
+[ModInfo("Frozone", "Hold grip while sliding to keep ice-like speed on the ground", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
+public class Frozone : MenuMod
+{
+    public override string BindHint => "Grip";
+    public override void Update()
+    {
+        if (!H.Ready) return;
+        if (!(H.LGrip || H.RGrip)) return;
+        if (!Ground.Near(1.8f)) return;
+        Vector3 v = H.Rb.velocity;
+        Vector3 flat = new Vector3(v.x, 0f, v.z);
+        if (flat.magnitude < 2f)
+        {
+            Vector3 f = H.Look.forward; f.y = 0f; f.Normalize();
+            H.Rb.velocity = new Vector3(f.x * 8f, v.y, f.z * 8f);
+        }
+        else
+            H.Rb.velocity = new Vector3(v.x * 1.02f, v.y, v.z * 1.02f);
+    }
+}

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using TMPro;
 using GorillaLocomotion;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -550,4 +552,118 @@ public class HeadHalo : RingBase
     protected override float Spin   => 1.5f;
     protected override PrimitiveType Shape => PrimitiveType.Sphere;
     protected override Color Tint(int i) => H.Rainbow(0.4f, i / 12f);
+}
+
+[ModCategory(Cat.Visual)]
+[ModInfo("Night Time", "Dark sky / ambient for night vibe", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
+public class NightTime : MenuMod
+{
+    public override void Update()
+    {
+        RenderSettings.ambientLight = new Color(0.05f, 0.05f, 0.12f);
+        RenderSettings.ambientIntensity = 0.35f;
+    }
+}
+
+[ModCategory(Cat.Visual)]
+[ModInfo("Day Time", "Bright day ambient", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
+public class DayTime : MenuMod
+{
+    public override void Update()
+    {
+        RenderSettings.ambientLight = new Color(0.95f, 0.92f, 0.85f);
+        RenderSettings.ambientIntensity = 1.1f;
+    }
+}
+
+[ModCategory(Cat.Visual)]
+[ModInfo("Box ESP", "Draws a box outline at every other player's head", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
+public class BoxEsp : MenuMod
+{
+    private readonly List<LineRenderer> boxes = [];
+
+    public override void OnDisable()
+    {
+        foreach (LineRenderer l in boxes)
+            if (l != null) Object.Destroy(l.gameObject);
+        boxes.Clear();
+    }
+
+    public override void Update()
+    {
+        if (!H.Ready) return;
+        var rigs = Adv.OtherRigs();
+        // 12 edges per box ≈ use one line strip of 16 points cycling
+        while (boxes.Count < rigs.Count)
+        {
+            LineRenderer lr = H.MakeLine("BoxESP", Color.green, 0.008f);
+            lr.loop = true;
+            lr.positionCount = 16;
+            boxes.Add(lr);
+        }
+        while (boxes.Count > rigs.Count)
+        {
+            int i = boxes.Count - 1;
+            if (boxes[i] != null) Object.Destroy(boxes[i].gameObject);
+            boxes.RemoveAt(i);
+        }
+
+        for (int i = 0; i < rigs.Count; i++)
+        {
+            Vector3 c = Adv.RigHead(rigs[i]);
+            float s = 0.35f;
+            Vector3[] p =
+            {
+                c + new Vector3(-s, -s * 1.5f, -s), c + new Vector3(s, -s * 1.5f, -s),
+                c + new Vector3(s, -s * 1.5f, -s), c + new Vector3(s, -s * 1.5f, s),
+                c + new Vector3(s, -s * 1.5f, s), c + new Vector3(-s, -s * 1.5f, s),
+                c + new Vector3(-s, -s * 1.5f, s), c + new Vector3(-s, -s * 1.5f, -s),
+                c + new Vector3(-s, s, -s), c + new Vector3(s, s, -s),
+                c + new Vector3(s, s, -s), c + new Vector3(s, s, s),
+                c + new Vector3(s, s, s), c + new Vector3(-s, s, s),
+                c + new Vector3(-s, s, s), c + new Vector3(-s, s, -s),
+            };
+            boxes[i].positionCount = p.Length;
+            boxes[i].SetPositions(p);
+        }
+    }
+}
+
+[ModCategory(Cat.Visual)]
+[ModInfo("Name Tags", "Shows a floating label with distance above other players", ButtonType.Togglable, AccessSetting.Public, EnabledType.Disabled, 0)]
+public class NameTags : MenuMod
+{
+    private readonly List<TextMeshPro> tags = [];
+
+    public override void OnDisable()
+    {
+        foreach (TextMeshPro t in tags)
+            if (t != null) Object.Destroy(t.gameObject);
+        tags.Clear();
+    }
+
+    public override void Update()
+    {
+        if (!H.Ready) return;
+        var rigs = Adv.OtherRigs();
+        while (tags.Count < rigs.Count)
+            tags.Add(H.MakeHud("NameTag", Vector3.zero));
+        while (tags.Count > rigs.Count)
+        {
+            int i = tags.Count - 1;
+            if (tags[i] != null) Object.Destroy(tags[i].gameObject);
+            tags.RemoveAt(i);
+        }
+
+        for (int i = 0; i < rigs.Count; i++)
+        {
+            Vector3 head = Adv.RigHead(rigs[i]);
+            float d = Vector3.Distance(H.Head.position, head);
+            TextMeshPro t = tags[i];
+            t.transform.position = head + Vector3.up * 0.35f;
+            t.transform.rotation = Quaternion.LookRotation(t.transform.position - H.Head.position);
+            t.text = $"{rigs[i].name}\n{d:F1}m";
+            t.fontSize = 0.25f;
+        }
+    }
 }
