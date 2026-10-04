@@ -1,8 +1,0 @@
-C:\Users\user\Downloads\MonkeMenu_v2.7.0\MonkeMenu\bin\Release\netstandard2.1\Sounds\menu_open.wav
-C:\Users\user\Downloads\MonkeMenu_v2.7.0\MonkeMenu\bin\Release\netstandard2.1\Sounds\menu_click.wav
-C:\Users\user\Downloads\MonkeMenu_v2.7.0\MonkeMenu\bin\Release\netstandard2.1\MonkeMenu.deps.json
-C:\Users\user\Downloads\MonkeMenu_v2.7.0\MonkeMenu\bin\Release\netstandard2.1\MonkeMenu.dll
-C:\Users\user\Downloads\MonkeMenu_v2.7.0\MonkeMenu\obj\Release\netstandard2.1\MonkeMenu.csproj.AssemblyReference.cache
-C:\Users\user\Downloads\MonkeMenu_v2.7.0\MonkeMenu\obj\Release\netstandard2.1\MonkeMenu.GeneratedMSBuildEditorConfig.editorconfig
-C:\Users\user\Downloads\MonkeMenu_v2.7.0\MonkeMenu\obj\Release\netstandard2.1\MonkeMenu.csproj.CoreCompileInputs.cache
-C:\Users\user\Downloads\MonkeMenu_v2.7.0\MonkeMenu\obj\Release\netstandard2.1\MonkeMenu.dll
